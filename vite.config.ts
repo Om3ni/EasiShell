@@ -15,6 +15,9 @@ export default defineConfig({
     strictPort: true,
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
-    watch: { ignored: ["**/src-tauri/**"] }, // 3. ignore the Rust side
+    // 3. ignore the Rust side AND the workspace-root Cargo build output.
+    //    (As a Cargo workspace, `target/` lives at the repo root, not under
+    //    src-tauri/ — watching it causes EBUSY crashes on locked build artifacts.)
+    watch: { ignored: ["**/src-tauri/**", "**/target/**"] },
   },
 });
