@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri", "crates/ps-core"]
+
+# `crates/psbroker` (the elevated helper) joins in Phase 4 (Elevation).
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"

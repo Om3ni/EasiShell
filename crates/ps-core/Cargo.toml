@@ -1,0 +1,8 @@
+[package]
+name = "ps-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared PowerShell execution core (process runner, tools, guardrails, IPC types). Used by the Tauri app and the elevated broker."
+
+[dependencies]

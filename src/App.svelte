@@ -4,7 +4,7 @@
 </script>
 
 <main>
-  <h1>PowerShell Studio</h1>
+  <h1>EasiShell</h1>
   <p class="sub">Walking skeleton — plain Svelte + Vite, wired to a Tauri v2 backend.</p>
 </main>
 

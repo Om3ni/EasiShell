@@ -1,7 +1,7 @@
 {
-  "name": "psstudio",
+  "name": "easishell",
   "version": "0.1.0",
-  "description": "PowerShell Studio — a friendly GUI front door to PowerShell",
+  "description": "EasiShell — a friendly GUI front door to PowerShell",
   "type": "module",
   "scripts": {
     "dev": "vite",
