@@ -5,7 +5,7 @@
 //! If theres no real pwsh we fall back to the 5.1 powershell.exe, which ships with
 //! every Windows box so it's always there.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InterpKind {
@@ -28,6 +28,22 @@ impl Interpreter {
             InterpKind::Pwsh => "pwsh",
             InterpKind::WindowsPowerShell => "powershell",
         }
+    }
+
+    /// the flags we always launch a script file with. it's `-File`, never `-Command`,
+    /// and that matters: with -File the script body isnt re-parsed as command-line
+    /// tokens, so a parameter value cant smuggle in extra commands and we skip the
+    /// whole double-quote escaping headache. ExecutionPolicy Bypass because these are
+    /// our own generated scripts, not something off the internet.
+    pub fn file_invocation_args(&self, script_path: &Path) -> Vec<String> {
+        vec![
+            "-NoLogo".into(),
+            "-NoProfile".into(),
+            "-ExecutionPolicy".into(),
+            "Bypass".into(),
+            "-File".into(),
+            script_path.to_string_lossy().into_owned(),
+        ]
     }
 }
 

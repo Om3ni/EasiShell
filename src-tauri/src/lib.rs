@@ -1,14 +1,31 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+//! The EasiShell app shell. Wires up state + commands and starts Tauri; the actual work
+//! lives in the submodules and over in `ps-core`.
+
+mod commands;
+mod history;
+mod run_manager;
+mod state;
+
+use tauri::Manager;
+
+use state::{AppPaths, AppState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .setup(|app| {
+            // everything we write goes under the OS app-data dir. resolving it here (once,
+            // at startup) means the rest of the code just reads paths off state and never
+            // has to think about where that is.
+            let base = app.path().app_data_dir()?;
+            app.manage(AppState::new(AppPaths {
+                runs_dir: base.join("runs"),
+                history_dir: base.join("history"),
+            }));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![commands::runs::start_run])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

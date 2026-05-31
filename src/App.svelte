@@ -1,23 +1,16 @@
 <script lang="ts">
-  // Walking-skeleton placeholder. The runner UI (xterm console + command input)
-  // lands here once the ps-core runner + run_manager are wired.
+  // app shell. for now it's just the runner — the sidebar/library/tools come in later
+  // phases and will slot in around this.
+  import RunPanel from "./lib/features/runner/RunPanel.svelte";
 </script>
 
-<main>
-  <h1>EasiShell</h1>
-  <p class="sub">Walking skeleton — plain Svelte + Vite, wired to a Tauri v2 backend.</p>
-</main>
+<RunPanel />
 
 <style>
-  main {
-    font-family: var(--font, system-ui, sans-serif);
-    padding: 2rem;
+  :global(html, body, #app) {
+    height: 100%;
   }
-  h1 {
-    margin: 0 0 0.25rem;
-  }
-  .sub {
+  :global(body) {
     margin: 0;
-    opacity: 0.7;
   }
 </style>

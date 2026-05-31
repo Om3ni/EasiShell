@@ -7,12 +7,16 @@
 //! drift apart.
 
 use serde::Serialize;
+use ts_rs::TS;
 
-/// Id for a single run. it's a plain u64 alias on purpose — if we ever go to
-/// concurrent tabbed runs and want UUIDs instead, this is the one line to change.
-pub type RunId = u64;
+/// Id for a single run. plain u32 alias — kept narrow on purpose so it crosses the
+/// IPC boundary as a normal JS number (a u64 would come out the other side as bigint,
+/// which is just friction here). if we ever want UUIDs for concurrent runs, this is
+/// the one line that changes.
+pub type RunId = u32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../../src/lib/ipc/bindings/")]
 #[serde(rename_all = "lowercase")]
 pub enum RunStatus {
     Completed,
@@ -25,7 +29,8 @@ pub enum RunStatus {
 /// not lines. a terminal wants the `\r`s, the half-lines and the ANSI left alone, and a
 /// prompt printed without a trailing newline still has to reach the user — splitting on
 /// newlines would break all of that.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../../src/lib/ipc/bindings/")]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum RunEvent {
     Started {

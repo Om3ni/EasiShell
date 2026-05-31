@@ -23,4 +23,8 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ps-core = { path = "../crates/ps-core" }
+# we only need the channel + spawn bits here; the heavy process work lives in ps-core
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros", "time"] }
+# local-time stamps for the run-log filenames
+chrono = { version = "0.4", features = ["clock"] }
 

@@ -9,6 +9,8 @@ description = "Shared PowerShell execution core (process runner, tools, guardrai
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["process", "io-util", "rt-multi-thread", "macros", "sync", "time"] }
 encoding_rs = "0.8"
+# generates the matching TypeScript for our IPC types so the two sides cant drift
+ts-rs = "10"
 
 [target.'cfg(windows)'.dependencies]
 which = "7"
