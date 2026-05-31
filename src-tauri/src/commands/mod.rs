@@ -2,3 +2,4 @@
 //! thin and delegate into the real subsystems.
 
 pub mod runs;
+pub mod scripts;

@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "gen:bindings": "cargo test -p ps-core",
+    "gen:bindings": "cargo test --workspace",
     "tauri": "tauri"
   },
   "license": "MIT",

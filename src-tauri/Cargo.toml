@@ -29,4 +29,6 @@ tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros", "time"
 chrono = { version = "0.4", features = ["clock"] }
 # bundled = compiles SQLite in, so theres no system dependency to chase on a fresh box
 rusqlite = { version = "0.32", features = ["bundled"] }
+# generate TS for the app-level DTOs (Script etc.) into the same bindings dir as ps-core
+ts-rs = "10"
 

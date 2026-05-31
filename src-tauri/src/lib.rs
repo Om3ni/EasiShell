@@ -30,7 +30,14 @@ pub fn run() {
             ));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::runs::start_run])
+        .invoke_handler(tauri::generate_handler![
+            commands::runs::start_run,
+            commands::scripts::list_scripts,
+            commands::scripts::get_script,
+            commands::scripts::create_script,
+            commands::scripts::update_script,
+            commands::scripts::delete_script,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

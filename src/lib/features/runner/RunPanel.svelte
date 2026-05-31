@@ -2,13 +2,12 @@
   import Console, { type ConsoleApi } from "../../ui/Console.svelte";
   import { startRun, type RunEvent } from "../../ipc/api";
 
-  // a little starter snippet so the demo does something visibly streaming (the sleep
-  // makes the lines arrive one at a time instead of all at once).
-  let command = $state(
-    `Write-Output "hello from EasiShell"\n1..5 | ForEach-Object { "line $_"; Start-Sleep -Milliseconds 250 }`,
-  );
-  let running = $state(false);
+  // just runs whatever body it's handed and streams the result. it doesnt know or care
+  // whether that body is a saved script or something half-typed in the editor.
+  let { body }: { body: string } = $props();
+
   let term: ConsoleApi | undefined = $state();
+  let running = $state(false);
 
   async function run() {
     if (running || !term) return;
@@ -17,7 +16,7 @@
     term.write("\x1b[90m> running...\x1b[0m\r\n");
 
     try {
-      await startRun(command, (ev: RunEvent) => {
+      await startRun(body, (ev: RunEvent) => {
         if (ev.type === "stdout" || ev.type === "stderr") {
           term?.write(ev.chunk);
         } else if (ev.type === "exit") {
@@ -27,70 +26,44 @@
         }
       });
     } catch (e) {
-      // start_run itself failed (couldnt spawn, couldnt write the temp file, etc.)
       term?.write(`\r\n\x1b[31m${String(e)}\x1b[0m\r\n`);
       running = false;
     }
   }
 </script>
 
-<section class="panel">
-  <header>
-    <h1>EasiShell</h1>
-    <button onclick={run} disabled={running}>{running ? "Running..." : "Run"}</button>
-  </header>
-
-  <textarea
-    bind:value={command}
-    spellcheck="false"
-    placeholder="Type some PowerShell, then hit Run"
-  ></textarea>
-
+<div class="runner">
+  <div class="bar">
+    <button onclick={run} disabled={running || !body.trim()}>
+      {running ? "Running..." : "Run"}
+    </button>
+  </div>
   <div class="output">
     <Console onReady={(api) => (term = api)} />
   </div>
-</section>
+</div>
 
 <style>
-  .panel {
+  .runner {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    font-family: system-ui, sans-serif;
+    flex: 1;
+    min-height: 0;
   }
-  header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.6rem 1rem;
+  .bar {
+    padding: 0.4rem 0.6rem;
     border-bottom: 1px solid #333;
   }
-  h1 {
-    margin: 0;
-    font-size: 1.1rem;
-    flex: 1;
-  }
   button {
-    padding: 0.4rem 1.1rem;
-    font-size: 0.95rem;
+    padding: 0.4rem 1.2rem;
     cursor: pointer;
   }
   button:disabled {
     cursor: default;
     opacity: 0.6;
   }
-  textarea {
-    font-family: Consolas, "Cascadia Mono", monospace;
-    font-size: 0.9rem;
-    height: 7rem;
-    resize: vertical;
-    border: none;
-    border-bottom: 1px solid #333;
-    padding: 0.6rem 1rem;
-    outline: none;
-  }
   .output {
     flex: 1;
-    min-height: 0; /* lets the console shrink/scroll instead of pushing the layout */
+    min-height: 0;
   }
 </style>

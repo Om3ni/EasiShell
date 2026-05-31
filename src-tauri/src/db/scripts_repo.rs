@@ -6,10 +6,15 @@
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// A stored script, exactly as it lives in the table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/ipc/bindings/")]
 pub struct Script {
+    // i64 to match SQLite's rowid, but tell ts-rs to emit `number`: it crosses IPC as a
+    // JSON number anyway, and real id values never get anywhere near 2^53.
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub description: String,
@@ -23,7 +28,8 @@ pub struct Script {
 
 /// What the caller hands us to create or edit one. No id or timestamps — those are ours
 /// to assign, not the frontend's.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/ipc/bindings/")]
 pub struct ScriptInput {
     pub name: String,
     pub description: String,
