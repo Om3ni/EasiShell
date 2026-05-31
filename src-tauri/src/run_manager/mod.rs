@@ -12,18 +12,33 @@
 
 use std::time::Instant;
 
+use serde::Deserialize;
 use tauri::ipc::Channel;
 use tokio::sync::mpsc;
+use ts_rs::TS;
 
 use ps_core::runner::{self, RunEvent, RunId, RunSpec, RunStatus};
 
 use crate::history::{self, RunReport};
 use crate::state::AppState;
 
+/// One resolved parameter, ready to become argv. The frontend's param form builds these
+/// from the filled-in values: `value: None` is a switch (just `-Name`), `Some` is
+/// `-Name value`. A switch left off / an empty optional just isnt sent at all, so the
+/// script's own `param()` default takes over.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/ipc/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct RunArg {
+    pub name: String,
+    pub value: Option<String>,
+}
+
 /// Start a run. Returns the run id right away; output arrives later over `channel`.
 pub async fn start(
     state: &AppState,
     command: String,
+    args: Vec<RunArg>,
     channel: Channel<RunEvent>,
 ) -> Result<RunId, String> {
     let run_id = state.next_run_id();
@@ -35,10 +50,20 @@ pub async fn start(
     let script_path = state.paths.runs_dir.join(format!("{run_id}.ps1"));
     std::fs::write(&script_path, &command).map_err(|e| e.to_string())?;
 
+    // base launch flags end with `-File <path>`; the param args go after, each as its own
+    // argv element so a value with spaces or quotes cant turn into extra commands.
+    let mut argv = interp.file_invocation_args(&script_path);
+    for arg in &args {
+        argv.push(format!("-{}", arg.name));
+        if let Some(value) = &arg.value {
+            argv.push(value.clone());
+        }
+    }
+
     let spec = RunSpec {
         run_id,
         program: interp.path.clone(),
-        args: interp.file_invocation_args(&script_path),
+        args: argv,
         interp_label: interp.label().to_string(),
     };
 

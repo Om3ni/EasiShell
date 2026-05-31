@@ -1,10 +1,11 @@
 <script lang="ts">
   import Console, { type ConsoleApi } from "../../ui/Console.svelte";
-  import { startRun, type RunEvent } from "../../ipc/api";
+  import { startRun, type RunEvent, type RunArg } from "../../ipc/api";
 
-  // just runs whatever body it's handed and streams the result. it doesnt know or care
-  // whether that body is a saved script or something half-typed in the editor.
-  let { body }: { body: string } = $props();
+  // just runs whatever body it's handed (with the resolved param args) and streams the
+  // result. it doesnt know or care whether that body is a saved script or something
+  // half-typed in the editor.
+  let { body, args }: { body: string; args: RunArg[] } = $props();
 
   let term: ConsoleApi | undefined = $state();
   let running = $state(false);
@@ -16,7 +17,7 @@
     term.write("\x1b[90m> running...\x1b[0m\r\n");
 
     try {
-      await startRun(body, (ev: RunEvent) => {
+      await startRun(body, args, (ev: RunEvent) => {
         if (ev.type === "stdout" || ev.type === "stderr") {
           term?.write(ev.chunk);
         } else if (ev.type === "exit") {

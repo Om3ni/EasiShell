@@ -1,7 +1,9 @@
 <script lang="ts">
   // Pure editing surface. It owns no state of its own — name/tags/body are bound from
   // the parent (the workspace), and saving is the parent's job too. keeps this dumb and
-  // reusable; the body textarea becomes a real CodeMirror editor in the next slice.
+  // reusable.
+  import CodeEditor from "../../ui/CodeEditor.svelte";
+
   interface Props {
     name: string;
     tags: string;
@@ -26,11 +28,9 @@
       {dirty ? "Save" : "Saved"}
     </button>
   </div>
-  <textarea
-    bind:value={body}
-    spellcheck="false"
-    placeholder="Type some PowerShell here"
-  ></textarea>
+  <div class="code">
+    <CodeEditor bind:value={body} />
+  </div>
 </div>
 
 <style>
@@ -63,14 +63,10 @@
     cursor: default;
     opacity: 0.5;
   }
-  textarea {
-    font-family: Consolas, "Cascadia Mono", monospace;
-    font-size: 0.9rem;
-    height: 9rem;
-    resize: vertical;
-    border: none;
+  .code {
+    height: 240px;
     border-top: 1px solid #333;
-    padding: 0.6rem 0.8rem;
-    outline: none;
+    resize: vertical;
+    overflow: hidden;
   }
 </style>

@@ -13,4 +13,5 @@
 //! `crates/psbroker`. modules show up here as each slice actually needs them rather than
 //! all at once — runner came first since it's the riskiest piece.
 
+pub mod paramspec;
 pub mod runner;
