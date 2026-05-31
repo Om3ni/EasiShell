@@ -1,0 +1,20 @@
+# Dependencies
+node_modules
+
+# Frontend build output (Vite)
+dist
+
+# Rust / Cargo (workspace target dir lives at root)
+target
+
+# Tauri generated
+src-tauri/gen/schemas
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.timestamp-*
