@@ -2,6 +2,7 @@
 //! lives in the submodules and over in `ps-core`.
 
 mod commands;
+mod db;
 mod history;
 mod run_manager;
 mod state;
@@ -19,10 +20,14 @@ pub fn run() {
             // at startup) means the rest of the code just reads paths off state and never
             // has to think about where that is.
             let base = app.path().app_data_dir()?;
-            app.manage(AppState::new(AppPaths {
-                runs_dir: base.join("runs"),
-                history_dir: base.join("history"),
-            }));
+            let conn = db::open(&base.join("easishell.db"))?;
+            app.manage(AppState::new(
+                AppPaths {
+                    runs_dir: base.join("runs"),
+                    history_dir: base.join("history"),
+                },
+                conn,
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![commands::runs::start_run])

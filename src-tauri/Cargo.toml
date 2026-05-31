@@ -27,4 +27,6 @@ ps-core = { path = "../crates/ps-core" }
 tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros", "time"] }
 # local-time stamps for the run-log filenames
 chrono = { version = "0.4", features = ["clock"] }
+# bundled = compiles SQLite in, so theres no system dependency to chase on a fresh box
+rusqlite = { version = "0.32", features = ["bundled"] }
 

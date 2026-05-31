@@ -6,6 +6,9 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
+
+use rusqlite::Connection;
 
 use ps_core::runner::RunId;
 
@@ -19,14 +22,19 @@ pub struct AppPaths {
 pub struct AppState {
     next_run_id: AtomicU32,
     pub paths: AppPaths,
+    /// One serialized writer connection behind a Mutex. rusqlite's Connection isn't Sync,
+    /// and a single writer keeps us clear of SQLITE_BUSY fights — DB ops are tiny and
+    /// quick, so the lock is never held long enough to matter.
+    pub db: Mutex<Connection>,
 }
 
 impl AppState {
-    pub fn new(paths: AppPaths) -> Self {
+    pub fn new(paths: AppPaths, db: Connection) -> Self {
         Self {
             // start at 1 so a run id of 0 always means "unset" if we ever see one
             next_run_id: AtomicU32::new(1),
             paths,
+            db: Mutex::new(db),
         }
     }
 
