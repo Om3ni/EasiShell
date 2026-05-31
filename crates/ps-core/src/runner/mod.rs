@@ -1,8 +1,9 @@
-//! The process runner: interpreter resolution, spawning, and output streaming.
+//! The process runner — figuring out the interpreter, launching it, and streaming
+//! what it prints.
 //!
-//! Sub-slices land here as the build progresses (stdin, job-object tree-kill,
-//! the temp-`.ps1` + encoding preamble for the real runner). This first cut
-//! proves spawn → stream → exit.
+//! More lands here as we go (stdin, the job-object tree-kill, the temp `.ps1` plus
+//! encoding preamble the real runner needs). this first cut just proves the spine:
+//! spawn → stream → exit.
 
 pub mod events;
 pub mod interp;

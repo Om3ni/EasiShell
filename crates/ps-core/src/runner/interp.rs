@@ -1,12 +1,12 @@
-//! Locating the PowerShell interpreter.
+//! Working out which PowerShell to actually run.
 //!
-//! Prefer PowerShell 7 (`pwsh`) when present — it emits ANSI color over a pipe,
-//! which Windows PowerShell 5.1 does not. Otherwise fall back to the 5.1
-//! `powershell.exe` that always ships with Windows.
+//! We want pwsh 7 if its around, mainly because it emits ANSI color over a pipe and
+//! Windows PowerShell 5.1 just doesnt — so under 5.1 the console ends up colorless.
+//! If theres no real pwsh we fall back to the 5.1 powershell.exe, which ships with
+//! every Windows box so it's always there.
 
 use std::path::PathBuf;
 
-/// Which PowerShell flavor was resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InterpKind {
     /// PowerShell 7+ (`pwsh`).
@@ -15,7 +15,7 @@ pub enum InterpKind {
     WindowsPowerShell,
 }
 
-/// A resolved interpreter: its executable path and which flavor it is.
+/// A resolved interpreter — where the exe is and which flavor we landed on.
 #[derive(Debug, Clone)]
 pub struct Interpreter {
     pub path: PathBuf,
@@ -23,7 +23,6 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    /// A short label for display/logging.
     pub fn label(&self) -> &'static str {
         match self.kind {
             InterpKind::Pwsh => "pwsh",
@@ -32,7 +31,6 @@ impl Interpreter {
     }
 }
 
-/// Resolve the interpreter to use, preferring a *real* `pwsh`.
 #[cfg(windows)]
 pub fn detect() -> Interpreter {
     if let Some(path) = find_pwsh() {
@@ -50,14 +48,17 @@ pub fn detect() -> Interpreter {
     }
 }
 
-/// Find a genuine `pwsh.exe`, skipping the Windows App Execution Alias stub.
+/// Find a genuine pwsh.exe and dodge the App Execution Alias.
 ///
-/// The alias at `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` is a 0-byte
-/// reparse point that works in an interactive shell but exits silently when
-/// launched with redirected stdio (our case), so it must be rejected.
+/// This one's a real gotcha. when PowerShell 7 comes from the Store, the only thing
+/// on PATH is `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` — and thats a 0-byte
+/// reparse stub. it works fine if you type `pwsh` in a terminal, but launch it with
+/// redirected stdio like we do and it just exits silently with no output. so we go
+/// looking for the actual install first, and if PATH only hands back the stub we
+/// reject it (0 bytes, or sitting under WindowsApps) and fall through to 5.1.
 #[cfg(windows)]
 fn find_pwsh() -> Option<PathBuf> {
-    // 1. Standard MSI install locations (these are real executables).
+    // the normal MSI install spots first — these are honest, real exes.
     for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
         if let Some(base) = std::env::var_os(var) {
             let cand = PathBuf::from(base).join("PowerShell").join("7").join("pwsh.exe");
@@ -66,7 +67,7 @@ fn find_pwsh() -> Option<PathBuf> {
             }
         }
     }
-    // 2. PATH lookup, rejecting the WindowsApps alias / any 0-byte stub.
+    // otherwise try PATH, but throw out the alias stub if thats all we get.
     if let Ok(p) = which::which("pwsh") {
         if is_real_exe(&p) && !is_windows_apps_alias(&p) {
             return Some(p);
@@ -75,6 +76,8 @@ fn find_pwsh() -> Option<PathBuf> {
     None
 }
 
+// the alias is 0 bytes, so the length check alone already catches it — the path check
+// below is just belt-and-suspenders in case the stub ever stops being empty.
 #[cfg(windows)]
 fn is_real_exe(p: &std::path::Path) -> bool {
     std::fs::metadata(p)
@@ -87,7 +90,8 @@ fn is_windows_apps_alias(p: &std::path::Path) -> bool {
     p.to_string_lossy().to_lowercase().contains("windowsapps")
 }
 
-/// Non-Windows fallback (dev/test on other platforms): just look for `pwsh`.
+// only here so the crate still builds/tests on non-Windows dev boxes. real detection
+// is the Windows path above.
 #[cfg(not(windows))]
 pub fn detect() -> Interpreter {
     let path = std::env::var_os("PWSH_PATH")

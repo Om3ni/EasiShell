@@ -1,15 +1,15 @@
-//! Spawn an interpreter and stream its output.
+//! Spawn a PowerShell process and stream whatever it prints back out.
 //!
-//! Design notes (the parts that bite if done naively):
-//! - **stdout and stderr each get their own reader task** so neither OS pipe
-//!   buffer can fill and deadlock the child.
-//! - We read **raw byte chunks**, not lines: `BufReader::lines()` would hide a
-//!   prompt written without a trailing newline and strip `\r`/ANSI.
-//! - Bytes are decoded with a **stateful** `encoding_rs` decoder so a multibyte
-//!   character split across two reads is not corrupted into U+FFFD.
-//! - Events flow to a generic `mpsc::Sender`, not a Tauri type, so this core is
-//!   reusable by both the in-process backend and the elevated broker, and is
-//!   testable without Tauri.
+//! A couple things in here are non-obvious and already bit me, so theyre worth
+//! spelling out. stdout and stderr each get there own reader task: if we only
+//! drained one, the other pipe's OS buffer could fill up and the child would just
+//! block forever waiting on us. We also read raw byte chunks instead of lines, on
+//! purpose — something like `Read-Host` writes its prompt with no trailing newline,
+//! and a line reader would swallow it until the user already needed to be typing.
+//!
+//! Events leave over a plain mpsc channel, nothing Tauri-shaped. that's deliberate:
+//! the same core then works for both the in-process backend and the elevated broker
+//! we add later, and we can test it without standing up the whole app.
 
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -20,14 +20,15 @@ use tokio::sync::mpsc;
 
 use super::events::{RunEvent, RunId, RunStatus};
 
-/// What to run: an interpreter path plus its argument vector. Arguments are
-/// passed as discrete argv elements (never a joined string) — injection-safe.
+/// What to run. The args stay as separate argv elements and are never glued into a
+/// single string — that's the thing that stops a value containing spaces or quotes
+/// from sneaking in extra commands.
 #[derive(Debug, Clone)]
 pub struct RunSpec {
     pub run_id: RunId,
     pub program: PathBuf,
     pub args: Vec<String>,
-    /// Short interpreter label for the `Started` event (e.g. "pwsh").
+    /// short label for the Started event, e.g. "pwsh". purely cosmetic.
     pub interp_label: String,
 }
 
@@ -37,10 +38,8 @@ enum Stream {
     Err,
 }
 
-/// Spawn the process described by `spec` and stream its lifecycle to `events`.
-///
-/// Returns when the child has exited and both reader tasks have drained. The
-/// final `RunEvent::Exit` is sent before returning.
+/// Spawn the process and pump its whole lifecycle into `events`. Comes back only once
+/// the child has exited *and* both readers have drained, with the final Exit sent.
 pub async fn run(spec: RunSpec, events: mpsc::Sender<RunEvent>) -> std::io::Result<RunStatus> {
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
@@ -51,8 +50,8 @@ pub async fn run(spec: RunSpec, events: mpsc::Sender<RunEvent>) -> std::io::Resu
 
     #[cfg(windows)]
     {
-        // CREATE_NO_WINDOW: don't flash a console window for the child.
-        // (`creation_flags` is an inherent method on tokio's Command.)
+        // keep the child from flashing up its own console window. creation_flags is an
+        // inherent method on tokio's Command so theres no trait to import for this.
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
@@ -64,7 +63,7 @@ pub async fn run(spec: RunSpec, events: mpsc::Sender<RunEvent>) -> std::io::Resu
         .send(RunEvent::Started {
             run_id: spec.run_id,
             interp: spec.program.display().to_string(),
-            interp_version: String::new(), // populated by a version probe later
+            interp_version: String::new(), // a version probe will fill this in later
             pid,
         })
         .await;
@@ -72,11 +71,13 @@ pub async fn run(spec: RunSpec, events: mpsc::Sender<RunEvent>) -> std::io::Resu
     let stdout = child.stdout.take().expect("stdout was piped");
     let stderr = child.stderr.take().expect("stderr was piped");
 
-    // Both pipes are drained continuously on independent tasks → no deadlock.
+    // each pipe gets drained on its own task, at the same time — this is the bit that
+    // avoids the deadlock described up top.
     let out_task = tokio::spawn(pump(stdout, Stream::Out, spec.run_id, events.clone()));
     let err_task = tokio::spawn(pump(stderr, Stream::Err, spec.run_id, events.clone()));
 
-    // Readers hit EOF when the child's pipe ends close, so this resolves promptly.
+    // both readers stop at EOF, which the child triggers when it closes its pipes on
+    // exit. so by the time we get here, wait() is basically instant.
     let _ = out_task.await;
     let _ = err_task.await;
 
@@ -98,7 +99,6 @@ pub async fn run(spec: RunSpec, events: mpsc::Sender<RunEvent>) -> std::io::Resu
     Ok(status)
 }
 
-/// Drain one pipe, decoding bytes to UTF-8 incrementally and emitting chunks.
 async fn pump<R: AsyncRead + Unpin>(
     mut reader: R,
     kind: Stream,
@@ -107,9 +107,13 @@ async fn pump<R: AsyncRead + Unpin>(
 ) {
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut buf = [0u8; 8192];
-    // `decode_to_string` writes into the String's spare capacity and returns
-    // `OutputFull` *without growing it* — so we must pre-reserve enough room
-    // (clearing the String below retains this capacity).
+
+    // heads up, this one's a trap: decode_to_string writes into the String's *spare
+    // capacity* and just returns OutputFull instead of growing it. a freshly cleared
+    // String can have zero spare room, so skip this reserve and every single decode
+    // quietly produces nothing — which looks exactly like "the process printed nothing"
+    // and sent me chasing the wrong thing for a while. clear() keeps the capacity, so
+    // reserving once up here is enough.
     let cap = decoder
         .max_utf8_buffer_length(buf.len())
         .unwrap_or(buf.len() * 4);
@@ -119,22 +123,23 @@ async fn pump<R: AsyncRead + Unpin>(
         match reader.read(&mut buf).await {
             Ok(0) => break, // EOF
             Ok(n) => {
-                text.clear(); // retains reserved capacity
-                // `last = false`: a trailing incomplete multibyte sequence stays
-                // buffered in the decoder for the next read (no U+FFFD at the seam).
+                text.clear();
+                // last = false keeps a trailing half-finished multibyte char buffered
+                // in the decoder so it can join the next read, instead of getting
+                // mangled into U+FFFD right at the seam.
                 let _ = decoder.decode_to_string(&buf[..n], &mut text, false);
                 if text.is_empty() {
                     continue;
                 }
                 if emit(&events, kind, run_id, &text).await.is_err() {
-                    break; // consumer gone; stop reading
+                    break; // receiver's gone, no point reading more
                 }
             }
             Err(_) => break,
         }
     }
 
-    // Flush any bytes the decoder was holding.
+    // flush whatever the decoder was still holding onto
     text.clear();
     let _ = decoder.decode_to_string(b"", &mut text, true);
     if !text.is_empty() {
@@ -166,8 +171,9 @@ mod tests {
     use super::super::interp;
     use super::*;
 
-    /// The tracer bullet: actually spawn PowerShell and confirm we receive its
-    /// output as a stream and a clean exit. Proves the riskiest assumption.
+    // the tracer bullet. actually launches PowerShell and checks the output comes back
+    // as a stream and the process exits clean. if this is green, the scariest part of
+    // the whole app is proven.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn streams_output_and_exits_cleanly() {
         let interp = interp::detect();
@@ -178,8 +184,8 @@ mod tests {
                 "-NoLogo".into(),
                 "-NoProfile".into(),
                 "-Command".into(),
-                // Single quotes dodge command-line double-quote escaping; the real
-                // runner uses `-File <temp.ps1>`, so this never applies in practice.
+                // single quotes here sidestep the command-line double-quote escaping mess.
+                // the real runner uses `-File <temp.ps1>` so it never has to deal with this.
                 "1..3 | ForEach-Object { 'line ' + $_ }".into(),
             ],
             interp_label: interp.label().into(),
@@ -206,10 +212,6 @@ mod tests {
             stdout.contains("line 1") && stdout.contains("line 3"),
             "expected streamed lines.\n  stdout: {stdout:?}\n  stderr: {stderr:?}"
         );
-        assert_eq!(
-            exit,
-            Some((RunStatus::Completed, Some(0))),
-            "stderr: {stderr:?}"
-        );
+        assert_eq!(exit, Some((RunStatus::Completed, Some(0))), "stderr: {stderr:?}");
     }
 }
