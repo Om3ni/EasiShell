@@ -11,3 +11,5 @@
 //! Consumers: the Tauri app (`src-tauri`, direct/in-process backend) and the
 //! elevated broker (`crates/psbroker`, added in Phase 4). Modules are added as
 //! each vertical slice needs them — the runner lands first.
+
+pub mod runner;
